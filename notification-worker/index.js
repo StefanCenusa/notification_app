@@ -1,15 +1,8 @@
 var mongoose = require('mongoose');
 var Twitter = require('twitter');
+var async = require('async');
 
-var http = require('http');
 
-mongoose.connect('mongodb://notifications-mongo-01:.tBxUC51SZYQ3XfOsrYMi5TQE.JETxYd2nFvqqwOGtY-@ds028799.mlab.com:28799/notifications-mongo-01');
-
-var db = mongoose.connection;
-db.on('error', console.error.bind(console, 'Error connecting to MongoDB'));
-db.once('open', function callback() {
-    console.log('MongoDB connection open');
-});
 
 var tweetSchema = mongoose.Schema({
     name: String,
@@ -27,24 +20,56 @@ var twitter = new Twitter({
     access_token_secret: "8wbtC4tziZ3zsTCRHMzvTQpFny0LRC7fRCXlBx7qBY8nN"
 });
 
+var server = require('http').createServer();
+var io = require('socket.io')(server);
 
-twitter.stream('statuses/filter', {track: 'nodejs'}, function (stream) {
-    stream.on('data', function (data) {
+async.waterfall([
+    function(cb){
+        mongoose.connect('mongodb://notifications-mongo-01:.tBxUC51SZYQ3XfOsrYMi5TQE.JETxYd2nFvqqwOGtY-@ds028799.mlab.com:28799/notifications-mongo-01');
 
-        var screen_name = data.user ? data.user.screen_name : "Unknown";
-        console.log(data.id + ": " + screen_name + ": " + data.text);
-
-        var tweet = new Tweet({
-            name: screen_name,
-            text: data.text,
-            tweet_id: data.id
+        var db = mongoose.connection;
+        db.on('error', console.error.bind(console, 'Error connecting to MongoDB'));
+        db.once('open', function callback() {
+            console.log('MongoDB connection open');
+            cb();
         });
-        tweet.save(function (err, tweet) {
-            if (err) {
-                console.log(err);
-            } else {
-                console.log("Tweet saved!");
-            }
+    },
+    function(cb){
+        server.listen(3000, function () {
+            console.log('Server started');
+            cb();
+        });
+    }
+], function(){
+    io.on('connection', function (socket) {
+        twitter.stream('statuses/filter', {track: 'nodejs'}, function (stream) {
+            stream.on('data', function (data) {
+
+                var screen_name = data.user ? data.user.screen_name : "Unknown";
+                console.log(data.id + ": " + screen_name + ": " + data.text);
+
+                var tweet = new Tweet({
+                    name: screen_name,
+                    text: data.text,
+                    tweet_id: data.id
+                });
+
+                socket.emit('new_tweet', tweet);
+
+                tweet.save(function (err, tweet) {
+                    if (err) {
+                        console.log(err);
+                    } else {
+                        console.log("Tweet saved!");
+                    }
+                });
+            });
         });
     });
 });
+
+
+
+
+
+
