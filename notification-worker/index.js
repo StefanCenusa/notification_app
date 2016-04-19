@@ -1,7 +1,8 @@
 var mongoose = require('mongoose');
 var Twitter = require('twitter');
 var async = require('async');
-
+var express = require('express');
+var cors = require('cors');
 
 
 var tweetSchema = mongoose.Schema({
@@ -13,18 +14,20 @@ var tweetSchema = mongoose.Schema({
 
 var Tweet = mongoose.model('Tweet', tweetSchema);
 
-var twitter = new Twitter({
+var twitterUser = new Twitter({
     consumer_key: "V7UPCoR6CoQ7XAF9jPWQrApZC",
     consumer_secret: "lmWJdhPZu068nQy9XX7DyDB7Hz6ltyCnKPVFhnknu6juNwp2he",
     access_token_key: "318976549-xEpaf4Bgan330lPSk6gzNgT2GT8FUkXF8tzMlBJR",
     access_token_secret: "8wbtC4tziZ3zsTCRHMzvTQpFny0LRC7fRCXlBx7qBY8nN"
 });
 
-var server = require('http').createServer();
+var app = express();
+app.use(cors());
+var server = require('http').createServer(app);
 var io = require('socket.io')(server);
 
 async.waterfall([
-    function(cb){
+    function (cb) {
         mongoose.connect('mongodb://notifications-mongo-01:.tBxUC51SZYQ3XfOsrYMi5TQE.JETxYd2nFvqqwOGtY-@ds028799.mlab.com:28799/notifications-mongo-01');
 
         var db = mongoose.connection;
@@ -34,15 +37,17 @@ async.waterfall([
             cb();
         });
     },
-    function(cb){
+    function (cb) {
         server.listen(3000, function () {
             console.log('Server started');
             cb();
         });
     }
-], function(){
+], function () {
+    console.log("Waiting for client");
     io.on('connection', function (socket) {
-        twitter.stream('statuses/filter', {track: 'nodejs'}, function (stream) {
+        console.log("Client connected");
+        twitterUser.stream('statuses/filter', {track: 'nodejs'}, function (stream) {
             stream.on('data', function (data) {
 
                 var screen_name = data.user ? data.user.screen_name : "Unknown";
