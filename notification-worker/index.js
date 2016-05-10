@@ -26,6 +26,8 @@ app.use(cors());
 var server = require('http').createServer(app);
 var io = require('socket.io')(server);
 
+var client_sockets = [];
+
 async.waterfall([
     function (cb) {
         mongoose.connect('mongodb://notifications-mongo-01:.tBxUC51SZYQ3XfOsrYMi5TQE.JETxYd2nFvqqwOGtY-@ds028799.mlab.com:28799/notifications-mongo-01');
@@ -38,15 +40,6 @@ async.waterfall([
         });
     },
     function (cb) {
-        server.listen(3000, function () {
-            console.log('Server started');
-            cb();
-        });
-    }
-], function () {
-    console.log("Waiting for client");
-    io.on('connection', function (socket) {
-        console.log("Client connected");
         twitterUser.stream('statuses/filter', {track: 'nodejs'}, function (stream) {
             stream.on('data', function (data) {
 
@@ -59,8 +52,6 @@ async.waterfall([
                     tweet_id: data.id
                 });
 
-                socket.emit('new_tweet', tweet);
-
                 tweet.save(function (err, tweet) {
                     if (err) {
                         console.log(err);
@@ -68,7 +59,29 @@ async.waterfall([
                         console.log("Tweet saved!");
                     }
                 });
+
+                client_sockets.forEach(function(socket){
+                    socket.emit('new_tweet', tweet);
+                });
             });
+        });
+
+        server.listen(3000, function () {
+            console.log('Server started');
+            cb();
+        });
+    }
+], function () {
+    console.log("Waiting for client");
+    io.on('connection', function (socket) {
+        client_sockets.push(socket);
+        console.log("Client connected");
+
+        socket.on('disconnect', function() {
+            console.log('Got disconnect!');
+
+            var i = client_sockets.indexOf(socket);
+            client_sockets.splice(i, 1);
         });
     });
 });
